@@ -39,6 +39,10 @@ configuration files:
 No admin/root privileges are required. No daemon is created.
 No unrelated files are modified.
 
+> **Note**: `pip install sudobot` installs from PyPI. Publication to
+> PyPI is automated via GitHub Actions and Trusted Publishing. See
+> [Release and Publishing](#release-and-publishing) below.
+
 ## Uninstallation
 
 ```bash
@@ -69,6 +73,44 @@ pip install -e .
 # Run tests
 pytest tests/ -q
 ```
+
+## Release and Publishing
+
+Releases are created by pushing a version tag (e.g. `v0.1.0`).
+
+```bash
+git tag -a v0.1.0 -m "SudoBot v0.1.0"
+git push origin v0.1.0
+```
+
+When a `v*` tag is pushed, GitHub Actions automatically:
+
+1. **Builds** the package (`python -m build`)
+2. **Runs tests** (`pytest tests/ -q`)
+3. **Validates** the distribution (`python -m twine check dist/*`)
+4. **Publishes** to PyPI using Trusted Publishing (OIDC)
+
+### How Trusted Publishing works
+
+- The GitHub Actions workflow uses `pypa/gh-action-pypi-publish@release/v1`
+- Authentication is via GitHub's OIDC identity token (`permissions: id-token: write`)
+- No long-lived PyPI API tokens are stored as secrets
+- The workflow runs in an environment named `pypi` configured on PyPI
+
+### Prerequisites for PyPI publication
+
+A **Trusted Publisher** must be configured on PyPI:
+
+- **Owner**: `kartikeyadewan`
+- **Repository**: `SudoBot`
+- **Workflow**: `.github/workflows/publish.yml`
+- **Environment**: `pypi`
+
+This configuration is done manually on the [PyPI Trusted Publishers](https://pypi.org/manage/account/publishing/) page. Without it, the publish job will fail.
+
+> **Important**: Publishing has NOT yet been configured or tested.
+> Do not assume `pip install sudobot` works from PyPI until the
+> Trusted Publisher is configured and a manual publication succeeds.
 
 ## Security model
 
