@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include src/sudobot/integrations *
+recursive-include tests *
+recursive-include packaging *
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.egg-info
+global-exclude .pytest_cache

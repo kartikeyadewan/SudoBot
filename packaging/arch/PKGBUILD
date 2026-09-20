@@ -1,0 +1,32 @@
+# Maintainer: SudoBot Contributors <sudobot@example.com>
+pkgname=sudobot
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Lightweight, fast, offline-first CLI typo correction utility"
+arch=('any')
+url="https://github.com/sudobot/sudobot"
+license=('MIT')
+depends=('python>=3.10' 'python-rapidfuzz>=3.10')
+makedepends=('python-build' 'python-wheel' 'python-setuptools' 'python-rapidfuzz')
+install=sudobot.install
+source=("https://github.com/sudobot/sudobot/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/sudobot-${pkgver}"
+    python -m build
+}
+
+package() {
+    cd "${srcdir}/sudobot-${pkgver}"
+
+    # Install Python package
+    python -m pip install --no-deps --target "${pkgdir}/usr/lib/python3.14/site-packages" dist/sudobot-${pkgver}-py3-none-any.whl
+
+    # Create wrapper script for the CLI
+    install -Dm755 src/sudobot/cli.py "${pkgdir}/usr/bin/sudobot"
+
+    # Install shell integration scripts
+    install -Dm644 src/sudobot/integrations/bash.sh "${pkgdir}/usr/share/sudobot/integrations/bash.sh"
+    install -Dm644 src/sudobot/integrations/powershell.ps1 "${pkgdir}/usr/share/sudobot/integrations/powershell.ps1"
+}

@@ -1,0 +1,17 @@
+post_install() {
+    echo "To install shell integration, run: sudobot --install"
+    echo "Or manually source /usr/share/sudobot/integrations/bash.sh in your ~/.bashrc"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    echo "To uninstall shell integration, run: sudobot --uninstall"
+}
+
+post_remove() {
+    echo "Shell integration may still be in your shell config files."
+    echo "Run: sudobot --uninstall to clean up."
+}

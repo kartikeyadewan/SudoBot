@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3 --buildsystem=pyproject
+
+override_dh_auto_build:
+	python3 -m build
+
+override_dh_auto_install:
+	python3 -m build
+	python3 -m pip install --no-deps --target $(CURDIR)/debian/sudobot/usr/lib/python3/dist-packages dist/sudobot-0.1.0-py3-none-any.whl
+
+override_dh_install:
+	dh_install
+	install -d $(CURDIR)/debian/sudobot/usr/share/sudobot/integrations
+	install -m 644 src/sudobot/integrations/bash.sh $(CURDIR)/debian/sudobot/usr/share/sudobot/integrations/bash.sh
+	install -m 644 src/sudobot/integrations/powershell.ps1 $(CURDIR)/debian/sudobot/usr/share/sudobot/integrations/powershell.ps1
+	install -d $(CURDIR)/debian/sudobot/usr/bin
+	install -m 755 src/sudobot/cli.py $(CURDIR)/debian/sudobot/usr/bin/sudobot
