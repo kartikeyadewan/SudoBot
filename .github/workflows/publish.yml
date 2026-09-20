@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (tag or branch) to build and publish"
+        required: true
+        default: "v0.1.0"
 
 permissions:
   id-token: write
@@ -14,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
