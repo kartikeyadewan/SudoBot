@@ -111,11 +111,12 @@ def test_temporary_directory_discovery():
     tmpdir = tempfile.mkdtemp()
     try:
         # Create some "executable" files in the temp dir
-        # On Unix, make them executable
+        # On Unix, create the file first, then make it executable
         if sys.platform != "win32":
-            os.chmod(os.path.join(tmpdir, "mycmd"), 0o755)
-            with open(os.path.join(tmpdir, "mycmd"), "w") as f:
+            mycmd_path = os.path.join(tmpdir, "mycmd")
+            with open(mycmd_path, "w") as f:
                 f.write("#!/bin/sh\necho hello")
+            os.chmod(mycmd_path, 0o755)
         
         # Write a Windows batch file
         with open(os.path.join(tmpdir, "mycmd.cmd"), "w") as f:
@@ -126,8 +127,8 @@ def test_temporary_directory_discovery():
         try:
             os.environ["PATH"] = tmpdir + os.pathsep + old_path
             result = discover_commands()
-            # Should find mycmd (and possibly mycmd.cmd on Windows)
-            # Note: actual presence depends on platform
+            # Should find mycmd (via exec bit on Unix, via .cmd on Windows)
+            assert "mycmd" in result
         finally:
             os.environ["PATH"] = old_path
     finally:
