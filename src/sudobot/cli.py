@@ -31,6 +31,71 @@ def _get_powershell_script_path() -> str:
     return os.path.join(_get_integrations_dir(), "powershell.ps1")
 
 
+# --- Standalone (PyInstaller) stable install locations ---------------------
+#
+# A onefile executable extracts bundled files into a temporary _MEI*
+# directory on every launch, so shell configs must NEVER reference paths
+# inside it. For frozen builds, --install renders integration scripts with
+# the stable executable path baked in and stores them persistently:
+#   Linux:   ${XDG_DATA_HOME:-~/.local/share}/sudobot/
+#   Windows: %LOCALAPPDATA%\SudoBot\
+# Source/pip installs keep referencing the package files directly.
+
+EXE_PLACEHOLDER = "@@SUDOBOT_EXE@@"
+FROZEN_BASH_SCRIPT = "bash-frozen.sh"
+FROZEN_POWERSHELL_SCRIPT = "powershell-frozen.ps1"
+
+
+def _is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def _stable_data_dir() -> str:
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(
+            os.path.expanduser("~"), "AppData", "Local"
+        )
+        return os.path.join(base, "SudoBot")
+    xdg = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share"
+    )
+    return os.path.join(xdg, "sudobot")
+
+
+def _refuse_temp_path(path: str) -> str:
+    """Guard: integrated script/executable paths must never live in _MEI*."""
+    if "_MEI" in path:
+        raise RuntimeError(
+            "Refusing to register temporary PyInstaller path: " + path
+        )
+    return path
+
+
+def _render_frozen_script(template_name: str, exe_path: str) -> str:
+    template_path = os.path.join(_get_integrations_dir(), template_name)
+    with open(template_path) as f:
+        content = f.read()
+    if EXE_PLACEHOLDER not in content:
+        raise RuntimeError(
+            "Integration template missing placeholder: " + template_path
+        )
+    return content.replace(EXE_PLACEHOLDER, exe_path)
+
+
+def _install_frozen_script(template_name: str, installed_name: str) -> str:
+    """Render a frozen integration script into the stable data dir.
+
+    Returns the stable script path to register in shell configs.
+    """
+    exe_path = _refuse_temp_path(sys.executable)
+    stable_dir = _stable_data_dir()
+    os.makedirs(stable_dir, exist_ok=True)
+    dest = _refuse_temp_path(os.path.join(stable_dir, installed_name))
+    with open(dest, "w", newline="\n") as f:
+        f.write(_render_frozen_script(template_name, exe_path))
+    return dest
+
+
 def _read_shell_config(path: str) -> str:
     try:
         with open(path) as f:
@@ -57,7 +122,10 @@ def _powershell_profile_path() -> str:
 
 
 def _install_bash() -> list[str]:
-    bash_script = _get_bash_script_path()
+    if _is_frozen():
+        bash_script = _install_frozen_script("bash-frozen.sh", FROZEN_BASH_SCRIPT)
+    else:
+        bash_script = _get_bash_script_path()
     if not os.path.exists(bash_script):
         return ["Bash integration script not found at " + bash_script]
     changes = []
@@ -76,7 +144,12 @@ def _install_bash() -> list[str]:
 
 
 def _install_powershell() -> list[str]:
-    ps_script = _get_powershell_script_path()
+    if _is_frozen():
+        ps_script = _install_frozen_script(
+            "powershell-frozen.ps1", FROZEN_POWERSHELL_SCRIPT
+        )
+    else:
+        ps_script = _get_powershell_script_path()
     if not os.path.exists(ps_script):
         return ["PowerShell integration script not found at " + ps_script]
     changes = []
@@ -158,10 +231,34 @@ def _uninstall_powershell() -> list[str]:
     return changes
 
 
+def _remove_stable_copies() -> list[str]:
+    """Delete integration scripts previously rendered into the stable dir.
+
+    Only removes the exact filenames SudoBot itself creates.
+    """
+    changes = []
+    stable_dir = _stable_data_dir()
+    for name in (FROZEN_BASH_SCRIPT, FROZEN_POWERSHELL_SCRIPT):
+        path = os.path.join(stable_dir, name)
+        try:
+            os.remove(path)
+            changes.append(f"Removed {path}")
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+    try:
+        os.rmdir(stable_dir)  # succeeds only when empty
+    except OSError:
+        pass
+    return changes
+
+
 def uninstall() -> list[str]:
     changes = []
     changes.extend(_uninstall_bash())
     changes.extend(_uninstall_powershell())
+    changes.extend(_remove_stable_copies())
     return changes
 
 

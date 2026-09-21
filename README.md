@@ -68,11 +68,15 @@ configuration files:
 No admin/root privileges are required. No daemon is created.
 No unrelated files are modified.
 
-> **Note**: the standalone executables are single-file bundles whose
-> helper scripts live in a temporary extraction directory. Persistent
-> shell integration (`sudobot --install`) is most reliable with the
-> Python installation below. Direct typo correction
-> (`sudobot <command>`) works the same in both.
+> **Note**: the standalone executables are single-file bundles. Running
+> `sudobot --install` from one installs its integration scripts to a
+> stable per-user location with the executable path baked in —
+> `~/.local/share/sudobot/` on Linux
+> (`$XDG_DATA_HOME/sudobot/` if set) and `%LOCALAPPDATA%\SudoBot\` on
+> Windows — so shell configs never point at temporary extraction
+> directories. `sudobot --uninstall` removes both the config blocks and
+> those installed copies. If you move the executable afterwards, re-run
+> `sudobot --install`.
 
 **Optional Python installation** (requires Python 3.10+):
 

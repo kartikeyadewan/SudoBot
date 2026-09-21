@@ -20,6 +20,11 @@ a = Analysis(
     datas=[
         ("src/sudobot/integrations/bash.sh", "sudobot/integrations"),
         ("src/sudobot/integrations/powershell.ps1", "sudobot/integrations"),
+        ("src/sudobot/integrations/bash-frozen.sh", "sudobot/integrations"),
+        (
+            "src/sudobot/integrations/powershell-frozen.ps1",
+            "sudobot/integrations",
+        ),
     ],
     hiddenimports=[],
     hookspath=[],
