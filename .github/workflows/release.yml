@@ -73,8 +73,9 @@ jobs:
 
       - name: Smoke test executable
         run: |
-          .\dist\$env:ARTIFACT_NAME.exe --version
-          .\dist\$env:ARTIFACT_NAME.exe --help
+          $exe = Join-Path "dist" "$env:ARTIFACT_NAME.exe"
+          & $exe --version
+          & $exe --help
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
