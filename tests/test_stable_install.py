@@ -118,6 +118,49 @@ def test_temp_paths_are_refused():
         cli._refuse_temp_path("/tmp/_MEI12345/sudobot/integrations/bash.sh")
 
 
+def test_powershell_profile_path_is_resolved(sandbox_home):
+    """The profile path must be a real filesystem path, never '$PROFILE'."""
+    path = cli._powershell_profile_path()
+    assert path != "$PROFILE"
+    assert "$PROFILE" not in path
+    assert path.endswith("Microsoft.PowerShell_profile.ps1")
+    assert path.startswith(str(sandbox_home))
+
+
+def test_powershell_profile_prefers_existing_edition(sandbox_home):
+    """An existing PowerShell 7 profile wins over the 5.1 default."""
+    ps7 = (
+        sandbox_home
+        / "Documents"
+        / "PowerShell"
+        / "Microsoft.PowerShell_profile.ps1"
+    )
+    ps7.parent.mkdir(parents=True)
+    ps7.write_text("# existing\n")
+    assert cli._powershell_profile_path() == str(ps7)
+
+
+def test_frozen_powershell_install_writes_resolved_profile(
+    sandbox_home, fake_frozen, monkeypatch
+):
+    """Frozen --install registers the resolved profile, not '$PROFILE'."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    changes = cli.install()
+    assert any("Added to" in c for c in changes)
+
+    profile = cli._powershell_profile_path()
+    assert os.path.exists(profile)
+    with open(profile) as f:
+        content = f.read()
+    assert "# SudoBot PowerShell integration" in content
+    assert "powershell-frozen.ps1" in content
+    assert "$PROFILE" not in content
+
+    cli.uninstall()
+    with open(profile) as f:
+        assert "# SudoBot PowerShell integration" not in f.read()
+
+
 def test_source_install_unchanged(sandbox_home, monkeypatch):
     """Non-frozen installs keep referencing the package files directly."""
     monkeypatch.delattr(sys, "frozen", raising=False)

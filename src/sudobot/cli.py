@@ -118,7 +118,27 @@ def _bash_config_paths() -> list[str]:
 
 
 def _powershell_profile_path() -> str:
-    return os.path.expandvars("$PROFILE")
+    # NOTE: $PROFILE is a PowerShell automatic variable. Python's
+    # os.path.expandvars() only understands %NAME% syntax on Windows,
+    # so it would return the literal string "$PROFILE" and file writes
+    # would fail. Resolve the profile location natively instead:
+    #   Windows PowerShell 5.1: ~/Documents/WindowsPowerShell/...
+    #   PowerShell 7+:          ~/Documents/PowerShell/...
+    # Prefer an edition whose profile already exists; otherwise default
+    # to the 5.1 location shipped with Windows. No admin rights needed.
+    documents = os.path.join(os.path.expanduser("~"), "Documents")
+    candidates = [
+        os.path.join(
+            documents, "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"
+        ),
+        os.path.join(
+            documents, "PowerShell", "Microsoft.PowerShell_profile.ps1"
+        ),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return candidates[0]
 
 
 def _install_bash() -> list[str]:
@@ -160,6 +180,9 @@ def _install_powershell() -> list[str]:
     if marker in content:
         changes.append("PowerShell integration already configured")
     else:
+        parent = os.path.dirname(profile_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(profile_path, "a") as f:
             f.write(f"\n{marker}\n{source_line}")
         changes.append(f"Added to {profile_path}")
