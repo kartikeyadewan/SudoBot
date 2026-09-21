@@ -316,6 +316,10 @@ def _correct_command(command: str, arguments: list[str]) -> int:
     from sudobot.executor import execute
     try:
         result = execute([suggested] + arguments)
+        if result.get("stdout"):
+            print(result["stdout"], end="")
+        if result.get("stderr"):
+            print(result["stderr"], end="", file=sys.stderr)
         return result["returncode"]
     except Exception as e:
         print(f"SudoBot: Execution failed: {e}")
@@ -332,6 +336,16 @@ def main() -> int:
     parser.add_argument("--uninstall", action="store_true", help="Remove shell integration")
     parser.add_argument("command", nargs="?", default=None, help="Command to correct")
     parser.add_argument("arguments", nargs="*", default=[], help="Command arguments")
+
+    # A leading positional command takes precedence over flag parsing:
+    # everything after a mistyped command belongs to the target invocation
+    # (e.g. `sudobot pyhton --version` must correct `pyhton`, not print
+    # SudoBot's own version, since argparse would otherwise consume the
+    # target's flags as ours). Bare flags without a command keep their
+    # existing behavior below.
+    raw = sys.argv[1:]
+    if raw and not raw[0].startswith("-"):
+        return _correct_command(raw[0], raw[1:])
 
     args = parser.parse_args()
 
@@ -352,9 +366,6 @@ def main() -> int:
             print(change)
         print("Uninstallation complete.")
         return 0
-
-    if args.command:
-        return _correct_command(args.command, args.arguments)
 
     parser.print_help()
     return 0

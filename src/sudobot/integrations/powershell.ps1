@@ -4,192 +4,97 @@
     SudoBot PowerShell integration - automatic command-not-found handler.
 
 .DESCRIPTION
-    When dot-sourced into a PowerShell session, this script sets up an automatic
-    handler that invokes SudoBot after a genuine PowerShell command-not-found
-    error. The handler is session-only and does not permanently modify the
-    user's PowerShell profile.
+    When dot-sourced into a PowerShell session, this script registers a
+    session-global command-lookup hook via
+    $ExecutionContext.InvokeCommand.CommandNotFoundAction. A `trap` block
+    is NOT used because profile-scope traps do not intercept interactive
+    CommandNotFoundException errors in Windows PowerShell 5.1.
 
-    After the user types a command that PowerShell cannot find, SudoBot will:
-    1. Use fuzzy matching to find the most likely intended command
-    2. Display: "SudoBot: Did you mean `corrected_cmd args`? [y/N]"
-    3. If the user presses 'y' or types 'yes', execute the corrected command
-    4. If the user presses Enter or types anything else, execute nothing
+    The hook fires ONLY when command lookup fails, so valid commands
+    (even with nonzero exit codes), syntax errors, permission errors, and
+    other runtime failures never invoke SudoBot. The full typed invocation
+    (command name plus all arguments) is forwarded to SudoBot's shared CLI
+    correction path (match, confirm, execute). Session-only effect.
 
-    This is a development/test integration mechanism. It is not intended for
-    production use and does not require administrator privileges.
-
-.PROVIDE
-    Invoke-SudoBot    - Automatic command-not-found handler setup
+    This is a development/test integration mechanism. It does not require
+    administrator privileges.
 #>
 
-# Remove any existing Write-Error replacement to start clean
-if (FunctionExists "Sudobot:Write-Error") {
-    Remove-Function Sudobot:Write-Error
-}
-
-# ============================================================================
-# Automatic command-not-found handler
-# ============================================================================
-
-# Helper: Determine if an error is a genuine command-not-found
-function Is-CommandNotFoundError {
+function Get-SudoBotArgv {
     param(
-        [Management.Automation.ErrorRecord]$ErrorRecord
+        [string]$CommandName,
+        [string]$CommandLine
     )
-
-    # Check for CommandNotFoundException type
-    if ($ErrorRecord.Exception -is [System.Management.Automation.CommandNotFoundException]) {
-        return $true
+    # Resolve the full argv for a failed invocation.
+    # Returns @($CommandName) when the line is unavailable or unparseable.
+    # Engine verb-probe lookups (e.g. `get-<name>`) are detected via the
+    # line's first token and skipped by returning $null.
+    $argv = @($CommandName)
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) {
+        # No line to inspect: assume an engine verb-probe (`get-<name>`)
+        # rather than a genuine typed command, and skip it so the user
+        # never sees noise for the probe. A genuinely typed `get-*`
+        # command in an interactive session always has a CommandLine.
+        if ($CommandName -like 'get-*') { return $null }
+        return $argv
     }
-
-    # Check error message for command-not-found patterns
-    $msg = $ErrorRecord.ErrorMessage -or ""
-    if ($msg -like "*Cannot find a command*") { return $true }
-    if ($msg -like "*The term* is not recognized as a command*") { return $true }
-    if ($msg -like "*Word not found in this sentence*") { return $true }
-    return $false
-}
-
-# Helper: Invoke SudoBot with the failed command via Python
-function Invoke-SudoBotHelper {
-    param(
-        [string]$failedCommand
+    $parseErrors = $null
+    $tokens = [System.Management.Automation.PSParser]::Tokenize(
+        $CommandLine, [ref]$parseErrors
     )
-
-    # Call the Python integration and capture JSON output
-    $pythonScript = "
-import sys
-sys.path.insert(0, r'.\src')
-from sudobot.integrations.powershell import handle_command_not_found
-from sudobot.commands import discover_commands
-
-result = handle_command_not_found(
-    '$failedCommand',
-    discover_commands(),
-    require_confirmation=True
-)
-import json
-print(json.dumps(result))
-"
-
-    try {
-        $output = python -c $pythonScript 2>$null
-        if ($output) {
-            $result = ConvertFrom-Json $output
-            return $result
-        }
-    } catch {
-        # Python failed silently; fall through
-    }
-
-    # Fallback: return silent result
-    [pscustomobject]@{
-        suggested_command = $null
-        confirmed         = $null
-        executed          = $false
-        exit_code       = $null
-        action          = "no_suggestion"
-    }
-}
-
-# ============================================================================
-# Global trap for command-not-found errors
-# ============================================================================
-
-# When this script is dot-sourced, install the global error trap.
-if (-not $InvokingMyCommand) {
-    # Install the trap only once per session
-    if (-not (Get-Variable -Name SudobotTrapInstalled -Scope Global -ErrorAction SilentlyContinue)) {
-        Set-Variable -Name SudobotTrapInstalled -Value $true -Scope Global -Force
-
-        trap {
-            # Only handle the first error; then continue normally
-            if ($Events["Error"] -and $Events["Error"].Count -gt 0) {
-                # Already handled an error in this scope; let it pass through
-                continue
+    if ($null -eq $tokens -or $tokens.Count -eq 0) { return $argv }
+    $first = $tokens | Where-Object { $_.Type -eq 'Command' } | Select-Object -First 1
+    if ($null -eq $first) { return $argv }
+    if ($first.Content -ne $CommandName) { return $null }
+    $take = $false
+    foreach ($token in $tokens) {
+        if (-not $take) {
+            if ($token.Type -eq 'Command' -and $token.Content -eq $CommandName) {
+                $take = $true
             }
-
-            # Check if this is a command-not-found error
-            if (-not (Is-CommandNotFoundError -ErrorRecord $_)) {
-                # Not a command-not-found error; let it pass through
-                continue
-            }
-
-            # === SudoBot integration ===
-            # Extract the failed command name from the error
-            $failedCmd = ""
-            if ($_.InvocationInfo) {
-                $failedCmd = $_.InvocationInfo.PositionCommandName -or ""
-            }
-            if (-not $failedCmd) {
-                $failedCmd = $_.ScriptName -split '\|' | Select-Object -Last 1 -or ""
-            }
-            if (-not $failedCmd) {
-                $failedCmd = $_.Exception.Message -replace '.*["\'](.+)["\'].*', '$1' -or ""
-            }
-
-            if (-not $failedCmd) {
-                # Can't determine the command; let error pass through
-                continue
-            }
-
-            # Invoke SudoBot helper
-            $helperResult = Invoke-SudoBotHelper -failedCommand $failedCmd
-
-            # If there's a confident suggestion, attempt execution
-            if ($helperResult.action -eq "suggested") {
-                if ($helperResult.confirmed -eq $true) {
-                    $suggested = $helperResult.suggested_command -or ""
-                    $args = @()
-                    # Build corrected argv: replace only argv[0]
-                    # The original command name is replaced; arguments are preserved
-                    # by the PowerShell host through the invocation info
-                    try {
-                        & python -c "
-import sys
-sys.path.insert(0, r'.\src')
-from sudobot.executor import execute
-cmd = ['$suggested'] + sys.argv[1:]
-result = execute(cmd)
-print('Exit code: ' + str(result['returncode']))
-" 2>$null | ForEach-Object { $exeResult = $_ }
-                    } catch {
-                        # Execution failed silently
-                    }
-                } else {
-                    # User declined; nothing executes
-                    Write-Host "SudoBot: Command declined. Nothing executed." -ForegroundColor Yellow
-                }
-            }
-
-            # Re-display the original error (continue = re-throw)
             continue
-        } # end trap
-    } # end if not already installed
-} # end if not invoking
-
-# ============================================================================
-# Output: Confirmation for the user (manual use)
-# ============================================================================
-
-# Function: Display SudoBot suggestion
-function Show-SudoBotSuggestion {
-    param(
-        [string]$suggestedCommand,
-        [string]$originalCommand
-    )
-
-    Write-Host "SudoBot: Did you mean `$suggestedCommand`? [y/N]" -ForegroundColor Cyan
-
-    # Read user input
-    $input = Read-Host
-    # Note: For the automatic mechanism, the trap handles confirmation internally.
-    # This function is available for manual use.
+        }
+        if ($token.Type -in @('CommandArgument', 'CommandParameter', 'String', 'Number')) {
+            $argv += $token.Content
+        }
+    }
+    return $argv
 }
 
-# ============================================================================
-# End of integration
-# ============================================================================
+function Get-SudoBotCommandLine {
+    param($EventArgs)
+    # Best-effort full command line: the event property first (populated
+    # for interactive sessions), then session history as a fallback.
+    $line = $EventArgs.CommandLine
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        try { $line = (Get-History -Count 1).CommandLine } catch {}
+    }
+    return $line
+}
+
+# (Re)register the session-global command-not-found handler.
+$ExecutionContext.InvokeCommand.CommandNotFoundAction = {
+    param($failedCommand, $eventArgs)
+    try {
+        $line = Get-SudoBotCommandLine -EventArgs $eventArgs
+        $argv = Get-SudoBotArgv -CommandName $failedCommand -CommandLine $line
+        if ($null -eq $argv) { return }
+        # @() re-wrap: a single-element result arrives as a scalar, and
+        # splatting a scalar with @ would pass it character-by-character.
+        $argv = @($argv)
+        if ($argv.Count -eq 0) { return }
+        $eventArgs.StopSearch = $true
+        $cliArgs = @($argv[0]) + @($argv | Select-Object -Skip 1)
+        # Out-Host: native output emitted inside the lookup handler is
+        # otherwise swallowed instead of reaching the console.
+        & python -c "
+import sys
+sys.path.insert(0, r'.\src')
+from sudobot.cli import _correct_command
+sys.exit(_correct_command(sys.argv[1], sys.argv[2:]))
+" @cliArgs | Out-Host
+    } catch {}
+}
 
 Write-Host "SudoBot PowerShell integration loaded." -ForegroundColor Green
 Write-Host "Type a command that doesn't exist to test SudoBot." -ForegroundColor DarkGray
