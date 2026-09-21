@@ -23,6 +23,9 @@ def sandbox_home(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
     monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
+    # Keep any relative-path writes (e.g. the literal $PROFILE fallback)
+    # inside temp space instead of the repo checkout.
+    monkeypatch.chdir(tmp_path)
     return home
 
 
