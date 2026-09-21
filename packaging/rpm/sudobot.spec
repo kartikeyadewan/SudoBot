@@ -1,5 +1,5 @@
 Name:           sudobot
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Lightweight, fast, offline-first CLI typo correction utility
 License:        MIT
@@ -29,7 +29,7 @@ mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_pythonpath}
 
 # Install Python package
-python3 -m pip install --no-deps --target %{buildroot}%{_pythonpath} dist/sudobot-0.1.0-py3-none-any.whl
+python3 -m pip install --no-deps --target %{buildroot}%{_pythonpath} dist/sudobot-0.1.1-py3-none-any.whl
 
 # Create wrapper script for the CLI
 cat > %{buildroot}%{_bindir}/sudobot << 'EOF'
@@ -49,8 +49,10 @@ install -m 644 src/sudobot/integrations/powershell.ps1 %{buildroot}%{_datadir}/s
 %{_bindir}/sudobot
 %{_datadir}/sudobot/
 %{_pythonpath}/sudobot/
-%{_pythonpath}/sudobot-0.1.0.dist-info/
+%{_pythonpath}/sudobot-0.1.1.dist-info/
 
 %changelog
+* Sun Sep 21 2026 SudoBot Contributors <sudobot@example.com> - 0.1.1-1
+- Fix Windows standalone PowerShell installer profile resolution
 * Mon Sep 20 2026 SudoBot Contributors <sudobot@example.com> - 0.1.0-1
 - Initial package

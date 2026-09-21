@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-09-21
+
+### Fixed
+
+- **Windows standalone EXE PowerShell installer** — `sudobot --install`
+  no longer passes the literal string `$PROFILE` to Python (which Python
+  cannot expand and which failed with `PermissionError`). The installer
+  now resolves the current user's real PowerShell profile natively
+  (`~/Documents/WindowsPowerShell/...`, preferring an existing
+  PowerShell 7 profile when present) and creates the profile directory
+  if needed, so normal non-admin installation works.
+
+No other behavioral changes. Versions bumped to 0.1.1 across the Python
+package and distro packaging metadata.
+
 ## [0.1.0] — 2026-09-20
 
 ### Release Candidate / Initial Public Release Candidate
