@@ -32,7 +32,7 @@ need no Python installation.
 
 **Windows** (PowerShell):
 
-1. Download `SudoBot-0.1.1-windows-x64.exe`.
+1. Download `SudoBot-0.1.2-windows-x64.exe`.
 2. Place it somewhere on your `PATH` (optionally rename it to
    `sudobot.exe`).
 3. Optionally run `sudobot --install` to enable the PowerShell
@@ -41,16 +41,16 @@ need no Python installation.
 **Linux** (binary):
 
 ```bash
-chmod +x sudobot-0.1.1-linux-x86_64
-sudo mv sudobot-0.1.1-linux-x86_64 /usr/local/bin/sudobot
+chmod +x sudobot-0.1.2-linux-x86_64
+sudo mv sudobot-0.1.2-linux-x86_64 /usr/local/bin/sudobot
 sudobot --install   # Bash integration
 ```
 
 **Linux** (AppImage):
 
 ```bash
-chmod +x SudoBot-0.1.1-x86_64.AppImage
-./SudoBot-0.1.1-x86_64.AppImage --version
+chmod +x SudoBot-0.1.2-x86_64.AppImage
+./SudoBot-0.1.2-x86_64.AppImage --version
 ```
 
 Verify any download with the published `SHA256SUMS` file:

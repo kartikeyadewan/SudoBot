@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-09-21
+
+### Fixed
+
+- **PowerShell command-not-found interception** — replaced the
+  ineffective profile-scope `trap` block with the session-global
+  `$ExecutionContext.InvokeCommand.CommandNotFoundAction` lookup hook,
+  which is the mechanism that actually intercepts interactive
+  `CommandNotFoundException` errors in Windows PowerShell 5.1.
+- **Full argument preservation** — the failed invocation is tokenized
+  and the complete argv (command plus all arguments) is forwarded, so
+  `pyhton --version` corrects to `python --version`.
+- **Native output handling** — corrected-command stdout/stderr is shown
+  to the user instead of being swallowed.
+- **CLI dispatch** — a leading positional command now takes precedence
+  over flag parsing, so target-command flags are never mistaken for
+  SudoBot's own options.
+
+No other behavioral changes. Versions bumped to 0.1.2 across the Python
+package and distro packaging metadata.
+
 ## [0.1.1] — 2026-09-21
 
 ### Fixed
