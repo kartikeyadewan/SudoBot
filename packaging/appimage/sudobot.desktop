@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SudoBot
+GenericName=Command typo correction
+Comment=Offline-first CLI typo correction utility
+Exec=sudobot
+Icon=sudobot
+Categories=Utility;TerminalEmulator;System;
+Terminal=true
+StartupNotify=false

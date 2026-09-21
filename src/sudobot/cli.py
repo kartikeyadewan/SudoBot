@@ -15,6 +15,11 @@ from sudobot.integrations.bash import handle_command_not_found as bash_handle
 
 
 def _get_integrations_dir() -> str:
+    # When bundled as a standalone executable (PyInstaller), data files
+    # live under sys._MEIPASS. Otherwise use the package directory.
+    base = getattr(sys, "_MEIPASS", None)
+    if base is not None:
+        return os.path.join(base, "sudobot", "integrations")
     return os.path.join(os.path.dirname(__file__), "integrations")
 
 
@@ -233,3 +238,7 @@ def main() -> int:
 
     parser.print_help()
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

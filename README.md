@@ -25,9 +25,38 @@ Python 3.13.0
 
 ## Installation
 
+The recommended way to install SudoBot is from
+[GitHub Releases](https://github.com/kartikeyadewan/SudoBot/releases).
+Standalone executables are currently built for **x86_64/amd64** only and
+need no Python installation.
+
+**Windows** (PowerShell):
+
+1. Download `SudoBot-0.1.0-windows-x64.exe`.
+2. Place it somewhere on your `PATH` (optionally rename it to
+   `sudobot.exe`).
+3. Optionally run `sudobot --install` to enable the PowerShell
+   integration.
+
+**Linux** (binary):
+
 ```bash
-pip install sudobot
-sudobot --install
+chmod +x sudobot-0.1.0-linux-x86_64
+sudo mv sudobot-0.1.0-linux-x86_64 /usr/local/bin/sudobot
+sudobot --install   # Bash integration
+```
+
+**Linux** (AppImage):
+
+```bash
+chmod +x SudoBot-0.1.0-x86_64.AppImage
+./SudoBot-0.1.0-x86_64.AppImage --version
+```
+
+Verify any download with the published `SHA256SUMS` file:
+
+```bash
+sha256sum -c SHA256SUMS
 ```
 
 `sudobot --install` adds small, identifiable blocks to your shell
@@ -39,9 +68,26 @@ configuration files:
 No admin/root privileges are required. No daemon is created.
 No unrelated files are modified.
 
-> **Note**: `pip install sudobot` installs from PyPI. Publication to
-> PyPI is automated via GitHub Actions and Trusted Publishing. See
-> [Release and Publishing](#release-and-publishing) below.
+> **Note**: the standalone executables are single-file bundles whose
+> helper scripts live in a temporary extraction directory. Persistent
+> shell integration (`sudobot --install`) is most reliable with the
+> Python installation below. Direct typo correction
+> (`sudobot <command>`) works the same in both.
+
+**Optional Python installation** (requires Python 3.10+):
+
+```bash
+pip install sudobot
+sudobot --install
+```
+
+> PyPI availability may vary while automated publishing is being set up.
+> See [Release and Publishing](#release-and-publishing) below.
+
+**Distro packages**: files under `packaging/debian/`, `packaging/rpm/`,
+and `packaging/arch/` are packaging groundwork only. SudoBot is not
+currently installable from apt, dnf, pacman, Homebrew, or similar
+repositories.
 
 ## Uninstallation
 

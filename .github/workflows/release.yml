@@ -1,0 +1,197 @@
+name: Release
+
+# Builds standalone executables and attaches them to a GitHub Release.
+# Triggered ONLY by version tags (e.g. v0.1.0). Normal pushes and pull
+# requests never create releases. This workflow does NOT publish to PyPI.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest rapidfuzz
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Verify package version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "tag version: $TAG_VERSION"
+          echo "package version: $PKG_VERSION"
+          test "$TAG_VERSION" = "$PKG_VERSION"
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve artifact name
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          "ARTIFACT_NAME=SudoBot-$version-windows-x64" >> $env:GITHUB_ENV
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller rapidfuzz
+
+      - name: Build Windows executable
+        env:
+          SUDOBOT_ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+        run: python -m PyInstaller sudobot.spec --noconfirm --clean
+
+      - name: Smoke test executable
+        run: |
+          .\dist\$env:ARTIFACT_NAME.exe --version
+          .\dist\$env:ARTIFACT_NAME.exe --help
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/${{ env.ARTIFACT_NAME }}.exe
+
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve artifact name
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "ARTIFACT_NAME=sudobot-${VERSION}-linux-x86_64" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller rapidfuzz
+
+      - name: Build Linux executable
+        env:
+          SUDOBOT_ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+        run: python -m PyInstaller sudobot.spec --noconfirm --clean
+
+      - name: Smoke test executable
+        run: |
+          chmod +x "dist/${ARTIFACT_NAME}"
+          ls -l "dist/${ARTIFACT_NAME}"
+          "dist/${ARTIFACT_NAME}" --version
+          "dist/${ARTIFACT_NAME}" --help
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-exe
+          path: dist/${{ env.ARTIFACT_NAME }}
+
+  appimage:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Download Linux executable
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-exe
+          path: artifacts
+
+      - name: Resolve AppImage name
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "APPIMAGE_NAME=SudoBot-${VERSION}-x86_64.AppImage" >> "$GITHUB_ENV"
+
+      - name: Assemble AppDir
+        run: |
+          BIN=$(ls artifacts/sudobot-*-linux-x86_64)
+          mkdir -p SudoBot.AppDir
+          cp "$BIN" SudoBot.AppDir/sudobot
+          chmod +x SudoBot.AppDir/sudobot
+          ln -sf sudobot SudoBot.AppDir/AppRun
+          cp packaging/appimage/sudobot.desktop SudoBot.AppDir/
+          cp packaging/appimage/sudobot.svg SudoBot.AppDir/
+
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          curl -L -o appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ./appimagetool SudoBot.AppDir
+          mv SudoBot-x86_64.AppImage "${APPIMAGE_NAME}" 2>/dev/null || mv ./*.AppImage "${APPIMAGE_NAME}"
+          ls -l "${APPIMAGE_NAME}"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: ${{ env.APPIMAGE_NAME }}
+
+  release:
+    needs: [build-windows, build-linux, appimage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          body_path: packaging/github-release-notes.md
+          draft: false
